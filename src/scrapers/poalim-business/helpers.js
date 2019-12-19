@@ -10,7 +10,7 @@ import {
 import { fetchGetWithinPage } from '../../helpers/fetch';
 import { addMonths } from '../../helpers/dates';
 
-export async function fetchAccountData(page, options) {
+export async function fetchAccountData(page, options, emitProgress) {
   const restContext = await getRestContext(page);
   const realBaseUrl = 'https://biz2.bankhapoalim.co.il';
   const apiSiteUrl = `${realBaseUrl}/${restContext}`;
@@ -35,15 +35,7 @@ export async function fetchAccountData(page, options) {
     let checkingShekelsBalance = 0;
     if (txnsResult) {
       checkingShekelsBalance = txnsResult.transactions[0].currentBalance;
-
-      const date = new Date();
-      const dateString = new Date(date.getTime() - (date.getTimezoneOffset() * 60000))
-        .toISOString()
-        .split('T')[0];
-      fs.writeFile(`./old_data/POALIM_original_checking_bank_dump_${dateString}_${accountIndex}.json`, JSON.stringify(txnsResult.transactions), 'utf8', () => {
-        console.log('done dumping original checking dump file');
-      });
-
+      emitProgress(Object.assign(txnsResult, { requestUrl: txnsUrl }));
       txns = convertTransactions(txnsResult.transactions);
     }
 
@@ -54,17 +46,21 @@ export async function fetchAccountData(page, options) {
 
     const forigenTxnsUrl = `${apiSiteUrl}/foreign-currency/transactions?accountId=${accountNumber}&type=business&view=details&retrievalEndDate=${endDateStr}&retrievalStartDate=${startDateStr}&currencyCodeList=19,100&detailedAccountTypeCodeList=142&lang=he`;
     const forigenTxnsResult = await fetchPoalimXSRFWithinPageGet(page, forigenTxnsUrl, '/foreign-currency/transactions');
+    emitProgress(Object.assign(forigenTxnsResult, { requestUrl: forigenTxnsUrl }));
 
     const dollarsBalanceUrl = `${apiSiteUrl}/foreign-currency/transactions?accountId=${accountNumber}&view=graph&detailedAccountTypeCode=142&currencyCode=19&lang=he`;
     const dollarsBalanceResult = await fetchPoalimXSRFWithinPageGet(page, dollarsBalanceUrl, '/foreign-currency/transactions');
+    emitProgress(Object.assign(dollarsBalanceResult, { requestUrl: dollarsBalanceUrl }));
     const eurosBalanceUrl = `${apiSiteUrl}/foreign-currency/transactions?accountId=${accountNumber}&view=graph&detailedAccountTypeCode=142&currencyCode=100&lang=he`;
     const eurosBalanceResult = await fetchPoalimXSRFWithinPageGet(page, eurosBalanceUrl, '/foreign-currency/transactions');
+    emitProgress(Object.assign(eurosBalanceResult, { requestUrl: eurosBalanceUrl }));
 
     checkingDollarsBalance = dollarsBalanceResult.graphData[dollarsBalanceResult.graphData.length - 1].currencyAccountBalance;
     checkingEuroBalance = eurosBalanceResult.graphData[eurosBalanceResult.graphData.length - 1].currencyAccountBalance;
 
     const transactionBalanceUrl = `${apiSiteUrl}/foreign-currency/transactions?accountId=${accountNumber}&type=business&lang=he`;
     const transactionBalanceResult = await fetchPoalimXSRFWithinPageGet(page, transactionBalanceUrl, '/foreign-currency/transactions');
+    emitProgress(Object.assign(transactionBalanceResult, { requestUrl: transactionBalanceUrl }));
 
     for (
       let foreignAccountbalancesIndex = 0;
@@ -128,6 +124,7 @@ export async function fetchAccountData(page, options) {
     const creditcardMonths = [];
     const creditCardTxnsUrl = `${apiSiteUrl}/plastic-cards/transactions?accountId=${accountNumber}&type=current`;
     const creditCardTxnsResult = await fetchPoalimXSRFWithinPageGet(page, creditCardTxnsUrl, '/plastic-cards/transactions');
+    emitProgress(Object.assign(creditCardTxnsResult, { requestUrl: creditCardTxnsUrl }));
 
     if (creditCardTxnsResult) {
       creditcardMonths.push(creditCardTxnsResult);
@@ -143,6 +140,11 @@ export async function fetchAccountData(page, options) {
 
       const creditCardTxnsUrl = `${apiSiteUrl}/plastic-cards/transactions?accountId=${accountNumber}&type=previous&statementDate=${dateString}00`;
       const previousCreditCardTxnsResult = await fetchPoalimXSRFWithinPageGet(page, creditCardTxnsUrl, '/plastic-cards/transactions');
+      if (previousCreditCardTxnsResult) {
+        emitProgress(Object.assign(previousCreditCardTxnsResult, { requestUrl: creditCardTxnsUrl }));
+      } else {
+        emitProgress({ requestUrl: creditCardTxnsUrl });
+      }
 
       creditcardMonths.push(previousCreditCardTxnsResult);
     }

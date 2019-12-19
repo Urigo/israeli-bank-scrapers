@@ -71,14 +71,14 @@ class HapoalimBusinessScraper extends BaseScraper {
       companyId: 'hapoalim',
       startDate: addMonths(new Date(), -12),
     };
-    const result = await fetchAccountData(this.page, options);
+    const result = await fetchAccountData(this.page, options, this.emitProgress.bind(this));
 
     const date = new Date();
     const dateString = new Date(date.getTime() - (date.getTimezoneOffset() * 60000))
       .toISOString()
       .split('T')[0];
     fs.writeFile(`./old_data/POALIM_data_${dateString}.json`, JSON.stringify(result), 'utf8', () => {
-      console.log('done dumping NIS file');
+      // console.log('done dumping NIS file');
     });
 
     return result;
